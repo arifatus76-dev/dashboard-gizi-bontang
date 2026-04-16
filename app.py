@@ -593,6 +593,26 @@ def render_distribution(df):
     
     st.markdown('<div class="section-header">🗺️ Distribusi per Wilayah</div>', unsafe_allow_html=True)
     
+    # Pilihan indikator
+    col_filter, col_empty = st.columns([1, 3])
+    with col_filter:
+        indicator = st.selectbox(
+            "Pilih Indikator",
+            ["Stunting", "Wasting", "Overweight", "Underweight"],
+            key="dist_indicator"
+        )
+    
+    # Konfigurasi target per indikator
+    target_config = {
+        "Stunting": {"target": 14, "range": [10, 30]},
+        "Wasting": {"target": 5, "range": [0, 15]},
+        "Overweight": {"target": 5, "range": [0, 15]},
+        "Underweight": {"target": 10, "range": [5, 25]}
+    }
+    
+    target_val = target_config[indicator]["target"]
+    color_range = target_config[indicator]["range"]
+    
     df_latest = get_latest_data(df)
     
     col1, col2 = st.columns(2)
@@ -600,28 +620,28 @@ def render_distribution(df):
     with col1:
         puskesmas_data = df_latest.groupby('Puskesmas').agg({
             'Balita_Ditimbang': 'sum',
-            'Jml_Balita_Stunting': 'sum'
+            f'Jml_Balita_{indicator}': 'sum'
         }).reset_index()
-        puskesmas_data['Pct_Stunting'] = (puskesmas_data['Jml_Balita_Stunting'] / puskesmas_data['Balita_Ditimbang'] * 100).round(1)
-        puskesmas_data = puskesmas_data.sort_values('Pct_Stunting', ascending=True)
+        puskesmas_data[f'Pct_{indicator}'] = (puskesmas_data[f'Jml_Balita_{indicator}'] / puskesmas_data['Balita_Ditimbang'] * 100).round(2)
+        puskesmas_data = puskesmas_data.sort_values(f'Pct_{indicator}', ascending=True)
         
-        fig = px.bar(puskesmas_data, x='Pct_Stunting', y='Puskesmas', orientation='h',
-                     title='📊 Prevalensi Stunting per Puskesmas',
-                     color='Pct_Stunting', color_continuous_scale=['#16A34A', '#F59E0B', '#DC2626'],
-                     text='Pct_Stunting')
-        fig.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
-        fig.add_vline(x=14, line_dash="dash", line_color="green", annotation_text="Target 14%")
+        fig = px.bar(puskesmas_data, x=f'Pct_{indicator}', y='Puskesmas', orientation='h',
+                     title=f'📊 Prevalensi {indicator} per Puskesmas',
+                     color=f'Pct_{indicator}', color_continuous_scale=['#16A34A', '#F59E0B', '#DC2626'],
+                     text=f'Pct_{indicator}')
+        fig.update_traces(texttemplate='%{text:.2f}%', textposition='outside')
+        fig.add_vline(x=target_val, line_dash="dash", line_color="green", annotation_text=f"Target {target_val}%")
         fig.update_layout(height=400, showlegend=False)
         st.plotly_chart(fig, use_container_width=True)
     
     with col2:
-        treemap_data = df_latest[['Kecamatan', 'Kelurahan', 'Jml_Balita_Stunting', 'Pct_Balita_Stunting']].copy()
-        treemap_data = treemap_data[treemap_data['Jml_Balita_Stunting'] > 0]
+        treemap_data = df_latest[['Kecamatan', 'Kelurahan', f'Jml_Balita_{indicator}', f'Pct_Balita_{indicator}']].copy()
+        treemap_data = treemap_data[treemap_data[f'Jml_Balita_{indicator}'] > 0]
         
         if not treemap_data.empty:
-            fig = px.treemap(treemap_data, path=['Kecamatan', 'Kelurahan'], values='Jml_Balita_Stunting',
-                           color='Pct_Balita_Stunting', color_continuous_scale=['#16A34A', '#F59E0B', '#DC2626'],
-                           range_color=[10, 30], title='🗺️ Distribusi Stunting per Kelurahan')
+            fig = px.treemap(treemap_data, path=['Kecamatan', 'Kelurahan'], values=f'Jml_Balita_{indicator}',
+                           color=f'Pct_Balita_{indicator}', color_continuous_scale=['#16A34A', '#F59E0B', '#DC2626'],
+                           range_color=color_range, title=f'🗺️ Distribusi {indicator} per Kelurahan')
             fig.update_layout(height=400)
             st.plotly_chart(fig, use_container_width=True)
     
