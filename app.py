@@ -673,21 +673,64 @@ def render_comparison(df):
     
     st.markdown('<div class="section-header">⚖️ Perbandingan Antar Wilayah</div>', unsafe_allow_html=True)
     
+    # Pilihan level perbandingan
+    level = st.radio(
+        "Pilih Level Perbandingan",
+        ["Kelurahan", "Kecamatan", "Puskesmas"],
+        horizontal=True
+    )
+    
     df_latest = get_latest_data(df)
-    kelurahan_list = sorted(df_latest['Kelurahan'].unique())
+    
+    # Agregasi data berdasarkan level
+    if level == "Kelurahan":
+        wilayah_list = sorted(df_latest['Kelurahan'].unique())
+        wilayah_col = 'Kelurahan'
+        df_agg = df_latest
+    elif level == "Kecamatan":
+        wilayah_col = 'Kecamatan'
+        df_agg = df_latest.groupby('Kecamatan').agg({
+            'Balita_Ditimbang': 'sum',
+            'Jml_Balita_Stunting': 'sum',
+            'Jml_Balita_Wasting': 'sum',
+            'Jml_Balita_Overweight': 'sum',
+            'Jml_Balita_Underweight': 'sum'
+        }).reset_index()
+        # Hitung persentase
+        df_agg['Pct_Balita_Stunting'] = (df_agg['Jml_Balita_Stunting'] / df_agg['Balita_Ditimbang'] * 100).round(2)
+        df_agg['Pct_Balita_Wasting'] = (df_agg['Jml_Balita_Wasting'] / df_agg['Balita_Ditimbang'] * 100).round(2)
+        df_agg['Pct_Balita_Overweight'] = (df_agg['Jml_Balita_Overweight'] / df_agg['Balita_Ditimbang'] * 100).round(2)
+        df_agg['Pct_Balita_Underweight'] = (df_agg['Jml_Balita_Underweight'] / df_agg['Balita_Ditimbang'] * 100).round(2)
+        wilayah_list = sorted(df_agg['Kecamatan'].unique())
+    else:  # Puskesmas
+        wilayah_col = 'Puskesmas'
+        df_agg = df_latest.groupby('Puskesmas').agg({
+            'Balita_Ditimbang': 'sum',
+            'Jml_Balita_Stunting': 'sum',
+            'Jml_Balita_Wasting': 'sum',
+            'Jml_Balita_Overweight': 'sum',
+            'Jml_Balita_Underweight': 'sum'
+        }).reset_index()
+        # Hitung persentase
+        df_agg['Pct_Balita_Stunting'] = (df_agg['Jml_Balita_Stunting'] / df_agg['Balita_Ditimbang'] * 100).round(2)
+        df_agg['Pct_Balita_Wasting'] = (df_agg['Jml_Balita_Wasting'] / df_agg['Balita_Ditimbang'] * 100).round(2)
+        df_agg['Pct_Balita_Overweight'] = (df_agg['Jml_Balita_Overweight'] / df_agg['Balita_Ditimbang'] * 100).round(2)
+        df_agg['Pct_Balita_Underweight'] = (df_agg['Jml_Balita_Underweight'] / df_agg['Balita_Ditimbang'] * 100).round(2)
+        wilayah_list = sorted(df_agg['Puskesmas'].unique())
     
     col1, col2 = st.columns(2)
     
     with col1:
-        wilayah1 = st.selectbox("Pilih Wilayah 1", options=kelurahan_list, key='w1')
+        wilayah1 = st.selectbox(f"Pilih {level} 1", options=wilayah_list, key='w1')
     with col2:
-        wilayah2 = st.selectbox("Pilih Wilayah 2", options=[k for k in kelurahan_list if k != wilayah1], key='w2')
+        wilayah2 = st.selectbox(f"Pilih {level} 2", options=[k for k in wilayah_list if k != wilayah1], key='w2')
     
-    data1 = df_latest[df_latest['Kelurahan'] == wilayah1].iloc[0]
-    data2 = df_latest[df_latest['Kelurahan'] == wilayah2].iloc[0]
+    data1 = df_agg[df_agg[wilayah_col] == wilayah1].iloc[0]
+    data2 = df_agg[df_agg[wilayah_col] == wilayah2].iloc[0]
     
     categories = ['Stunting', 'Wasting', 'Overweight', 'Underweight']
     
+    # Radar chart
     fig = go.Figure()
     fig.add_trace(go.Scatterpolar(
         r=[data1['Pct_Balita_Stunting'], data1['Pct_Balita_Wasting'], data1['Pct_Balita_Overweight'], data1['Pct_Balita_Underweight']],
@@ -700,6 +743,34 @@ def render_comparison(df):
     fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 35])),
                       title=f'📊 Perbandingan {wilayah1} vs {wilayah2}', height=450)
     st.plotly_chart(fig, use_container_width=True)
+    
+    # Tabel perbandingan detail
+    st.markdown(f'<div class="section-header">📋 Detail Perbandingan {level}</div>', unsafe_allow_html=True)
+    
+    comparison_data = {
+        'Indikator': ['Stunting', 'Wasting', 'Overweight', 'Underweight'],
+        wilayah1: [
+            f"{data1['Pct_Balita_Stunting']:.2f}%".replace('.', ','),
+            f"{data1['Pct_Balita_Wasting']:.2f}%".replace('.', ','),
+            f"{data1['Pct_Balita_Overweight']:.2f}%".replace('.', ','),
+            f"{data1['Pct_Balita_Underweight']:.2f}%".replace('.', ',')
+        ],
+        wilayah2: [
+            f"{data2['Pct_Balita_Stunting']:.2f}%".replace('.', ','),
+            f"{data2['Pct_Balita_Wasting']:.2f}%".replace('.', ','),
+            f"{data2['Pct_Balita_Overweight']:.2f}%".replace('.', ','),
+            f"{data2['Pct_Balita_Underweight']:.2f}%".replace('.', ',')
+        ],
+        'Selisih': [
+            f"{(data1['Pct_Balita_Stunting'] - data2['Pct_Balita_Stunting']):+.2f}%".replace('.', ','),
+            f"{(data1['Pct_Balita_Wasting'] - data2['Pct_Balita_Wasting']):+.2f}%".replace('.', ','),
+            f"{(data1['Pct_Balita_Overweight'] - data2['Pct_Balita_Overweight']):+.2f}%".replace('.', ','),
+            f"{(data1['Pct_Balita_Underweight'] - data2['Pct_Balita_Underweight']):+.2f}%".replace('.', ',')
+        ]
+    }
+    
+    df_comparison = pd.DataFrame(comparison_data)
+    st.dataframe(df_comparison, use_container_width=True, hide_index=True)
 
 # ============================================================================
 # MAIN APP
