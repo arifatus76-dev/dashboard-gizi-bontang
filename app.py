@@ -182,6 +182,16 @@ def format_number(num):
         return "0"
     return f"{num:,.0f}".replace(",", ".")
 
+def format_number_decimal(num):
+    """Format angka dengan 2 desimal format Indonesia (koma sebagai desimal, titik sebagai ribuan)"""
+    if pd.isna(num):
+        return "0,00"
+    # Format dengan 2 desimal, lalu ubah ke format Indonesia
+    formatted = f"{num:,.2f}"
+    # Ganti koma ribuan dengan placeholder, lalu ganti titik desimal dengan koma, lalu placeholder dengan titik
+    formatted = formatted.replace(",", "X").replace(".", ",").replace("X", ".")
+    return formatted
+
 def format_pct(num):
     """Format persentase dengan format Indonesia (koma sebagai desimal)"""
     if pd.isna(num):
@@ -470,22 +480,47 @@ def filter_data(df, tahun, bulan, kecamatan, puskesmas):
 def render_overview(df, year_mode):
     """Render tab overview"""
     
-    # OPSI 1: Gunakan SEMUA data (kumulatif semua bulan)
     df_all = df.copy()
     
-    # Hitung KPI dari semua data
-    total_ditimbang = df_all['Balita_Ditimbang'].sum()
-    total_stunting = df_all['Jml_Balita_Stunting'].sum()
-    total_wasting = df_all['Jml_Balita_Wasting'].sum()
-    total_overweight = df_all['Jml_Balita_Overweight'].sum()
-    total_underweight = df_all['Jml_Balita_Underweight'].sum()
-    total_gizi_buruk = df_all['Jml_Gizi_Buruk_Balita_6_59_Bulan'].sum()
+    # Hitung RATA-RATA BULANAN (bukan total kumulatif)
+    # Agregasi per bulan dulu, lalu ambil rata-ratanya
+    if 'Bulan' in df_all.columns:
+        monthly_agg = df_all.groupby(['Tahun', 'Bulan']).agg({
+            'Balita_Bulan_Ini': 'sum',
+            'Balita_Ditimbang': 'sum',
+            'Jml_Balita_Stunting': 'sum',
+            'Jml_Balita_Wasting': 'sum',
+            'Jml_Balita_Overweight': 'sum',
+            'Jml_Balita_Underweight': 'sum'
+        }).reset_index()
+        
+        # Rata-rata bulanan (dibulatkan ke angka bulat)
+        avg_sasaran = int(round(monthly_agg['Balita_Bulan_Ini'].mean()))
+        avg_ditimbang = int(round(monthly_agg['Balita_Ditimbang'].mean()))
+        avg_stunting = int(round(monthly_agg['Jml_Balita_Stunting'].mean()))
+        avg_wasting = int(round(monthly_agg['Jml_Balita_Wasting'].mean()))
+        avg_overweight = int(round(monthly_agg['Jml_Balita_Overweight'].mean()))
+        avg_underweight = int(round(monthly_agg['Jml_Balita_Underweight'].mean()))
+        
+        jumlah_bulan = len(monthly_agg)
+    else:
+        # Fallback jika tidak ada kolom Bulan
+        avg_sasaran = int(df_all['Balita_Bulan_Ini'].sum())
+        avg_ditimbang = int(df_all['Balita_Ditimbang'].sum())
+        avg_stunting = int(df_all['Jml_Balita_Stunting'].sum())
+        avg_wasting = int(df_all['Jml_Balita_Wasting'].sum())
+        avg_overweight = int(df_all['Jml_Balita_Overweight'].sum())
+        avg_underweight = int(df_all['Jml_Balita_Underweight'].sum())
+        jumlah_bulan = 1
     
-    # Gunakan WEIGHTED AVERAGE untuk persentase (sama dengan cara hitung Excel)
-    pct_stunting = round((total_stunting / total_ditimbang) * 100, 2) if total_ditimbang > 0 else 0
-    pct_wasting = round((total_wasting / total_ditimbang) * 100, 2) if total_ditimbang > 0 else 0
-    pct_overweight = round((total_overweight / total_ditimbang) * 100, 2) if total_ditimbang > 0 else 0
-    pct_underweight = round((total_underweight / total_ditimbang) * 100, 2) if total_ditimbang > 0 else 0
+    # Hitung persentase dari rata-rata
+    pct_stunting = round((avg_stunting / avg_ditimbang) * 100, 2) if avg_ditimbang > 0 else 0
+    pct_wasting = round((avg_wasting / avg_ditimbang) * 100, 2) if avg_ditimbang > 0 else 0
+    pct_overweight = round((avg_overweight / avg_ditimbang) * 100, 2) if avg_ditimbang > 0 else 0
+    pct_underweight = round((avg_underweight / avg_ditimbang) * 100, 2) if avg_ditimbang > 0 else 0
+    
+    # Hitung Cakupan Penimbangan
+    pct_cakupan = round((avg_ditimbang / avg_sasaran) * 100, 2) if avg_sasaran > 0 else 0
     
     # Info periode
     tahun_list = sorted(df['Tahun'].unique())
@@ -498,31 +533,43 @@ def render_overview(df, year_mode):
         <strong>📊 Kelurahan:</strong> {df['Kelurahan'].nunique()}
         &nbsp;|&nbsp;
         <strong>🏥 Puskesmas:</strong> {df['Puskesmas'].nunique()}
+        &nbsp;|&nbsp;
+        <strong>📆 Data:</strong> Rata-rata {jumlah_bulan} bulan
     </div>
     """, unsafe_allow_html=True)
     
     # KPI Cards
-    st.markdown('<div class="section-header">📊 Indikator Utama</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header">📊 Indikator Utama (Rata-rata Bulanan)</div>', unsafe_allow_html=True)
     
     col1, col2, col3, col4, col5, col6 = st.columns(6)
     
     with col1:
-        st.metric("👶 Balita Ditimbang", format_number(total_ditimbang))
+        st.metric("👶 Balita Ditimbang", format_number(avg_ditimbang))
+        st.caption("Rata-rata per Bulan")
     with col2:
         st.metric("📏 Stunting", format_pct(pct_stunting))
-        st.caption(f"{format_number(total_stunting)} balita")
+        st.caption(f"{format_number(avg_stunting)} balita/bulan")
     with col3:
         st.metric("⚖️ Wasting", format_pct(pct_wasting))
-        st.caption(f"{format_number(total_wasting)} balita")
+        st.caption(f"{format_number(avg_wasting)} balita/bulan")
     with col4:
         st.metric("📈 Overweight", format_pct(pct_overweight))
-        st.caption(f"{format_number(total_overweight)} balita")
+        st.caption(f"{format_number(avg_overweight)} balita/bulan")
     with col5:
         st.metric("⬇️ Underweight", format_pct(pct_underweight))
-        st.caption(f"{format_number(total_underweight)} balita")
+        st.caption(f"{format_number(avg_underweight)} balita/bulan")
     with col6:
-        st.metric("🚨 Gizi Buruk", format_number(total_gizi_buruk))
-        st.caption("(6-59 Bulan)")
+        st.metric("📋 % D/S", format_pct(pct_cakupan))
+        st.caption("Cakupan Penimbangan")
+    
+    # Catatan Cakupan Penimbangan
+    st.markdown(f"""
+    <div style="background-color: #F0FDF4; border: 1px solid #86EFAC; border-radius: 8px; padding: 12px; margin-top: 10px; font-size: 0.85rem;">
+        <strong>📝 Catatan Cakupan Penimbangan:</strong><br>
+        Cakupan = (Balita Ditimbang / Sasaran Balita) × 100%<br>
+        Cakupan = ({format_number(avg_ditimbang)} / {format_number(avg_sasaran)}) × 100% = <strong>{format_pct(pct_cakupan)}</strong>
+    </div>
+    """, unsafe_allow_html=True)
     
     # Gauge Charts
     st.markdown('<div class="section-header">🎯 Status Terhadap Target</div>', unsafe_allow_html=True)
@@ -589,9 +636,9 @@ def render_trend(df):
 # TAB DISTRIBUSI
 # ============================================================================
 def render_distribution(df):
-    """Render tab distribusi"""
+    """Render tab distribusi dengan RATA-RATA BULANAN"""
     
-    st.markdown('<div class="section-header">🗺️ Distribusi per Wilayah</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header">🗺️ Distribusi per Wilayah (Rata-rata Bulanan)</div>', unsafe_allow_html=True)
     
     # Pilihan indikator
     col_filter, col_empty = st.columns([1, 3])
@@ -613,19 +660,37 @@ def render_distribution(df):
     target_val = target_config[indicator]["target"]
     color_range = target_config[indicator]["range"]
     
-    df_latest = get_latest_data(df)
+    # Hitung rata-rata bulanan per Puskesmas
+    puskesmas_monthly = df.groupby(['Tahun', 'Bulan', 'Puskesmas']).agg({
+        'Balita_Ditimbang': 'sum',
+        f'Jml_Balita_{indicator}': 'sum'
+    }).reset_index()
+    
+    puskesmas_avg = puskesmas_monthly.groupby('Puskesmas').agg({
+        'Balita_Ditimbang': 'mean',
+        f'Jml_Balita_{indicator}': 'mean'
+    }).reset_index()
+    
+    puskesmas_avg[f'Pct_{indicator}'] = (puskesmas_avg[f'Jml_Balita_{indicator}'] / puskesmas_avg['Balita_Ditimbang'] * 100).round(2)
+    puskesmas_avg = puskesmas_avg.sort_values(f'Pct_{indicator}', ascending=True)
+    
+    # Hitung rata-rata bulanan per Kelurahan
+    kelurahan_monthly = df.groupby(['Tahun', 'Bulan', 'Kecamatan', 'Kelurahan']).agg({
+        'Balita_Ditimbang': 'sum',
+        f'Jml_Balita_{indicator}': 'sum',
+        f'Pct_Balita_{indicator}': 'mean'
+    }).reset_index()
+    
+    kelurahan_avg = kelurahan_monthly.groupby(['Kecamatan', 'Kelurahan']).agg({
+        'Balita_Ditimbang': 'mean',
+        f'Jml_Balita_{indicator}': 'mean',
+        f'Pct_Balita_{indicator}': 'mean'
+    }).reset_index()
     
     col1, col2 = st.columns(2)
     
     with col1:
-        puskesmas_data = df_latest.groupby('Puskesmas').agg({
-            'Balita_Ditimbang': 'sum',
-            f'Jml_Balita_{indicator}': 'sum'
-        }).reset_index()
-        puskesmas_data[f'Pct_{indicator}'] = (puskesmas_data[f'Jml_Balita_{indicator}'] / puskesmas_data['Balita_Ditimbang'] * 100).round(2)
-        puskesmas_data = puskesmas_data.sort_values(f'Pct_{indicator}', ascending=True)
-        
-        fig = px.bar(puskesmas_data, x=f'Pct_{indicator}', y='Puskesmas', orientation='h',
+        fig = px.bar(puskesmas_avg, x=f'Pct_{indicator}', y='Puskesmas', orientation='h',
                      title=f'📊 Prevalensi {indicator} per Puskesmas',
                      color=f'Pct_{indicator}', color_continuous_scale=['#16A34A', '#F59E0B', '#DC2626'],
                      text=f'Pct_{indicator}')
@@ -635,7 +700,7 @@ def render_distribution(df):
         st.plotly_chart(fig, use_container_width=True)
     
     with col2:
-        treemap_data = df_latest[['Kecamatan', 'Kelurahan', f'Jml_Balita_{indicator}', f'Pct_Balita_{indicator}']].copy()
+        treemap_data = kelurahan_avg[['Kecamatan', 'Kelurahan', f'Jml_Balita_{indicator}', f'Pct_Balita_{indicator}']].copy()
         treemap_data = treemap_data[treemap_data[f'Jml_Balita_{indicator}'] > 0]
         
         if not treemap_data.empty:
@@ -645,8 +710,24 @@ def render_distribution(df):
             fig.update_layout(height=400)
             st.plotly_chart(fig, use_container_width=True)
     
-    # Scatter plot
+    # Scatter plot dengan rata-rata bulanan
     st.markdown('<div class="section-header">🔍 Analisis Korelasi</div>', unsafe_allow_html=True)
+    
+    # Hitung rata-rata bulanan per kelurahan untuk scatter plot
+    scatter_monthly = df.groupby(['Tahun', 'Bulan', 'Kecamatan', 'Kelurahan']).agg({
+        'Balita_Ditimbang': 'sum',
+        'Jml_Balita_Stunting': 'sum',
+        'Jml_Balita_Wasting': 'sum'
+    }).reset_index()
+    
+    scatter_avg = scatter_monthly.groupby(['Kecamatan', 'Kelurahan']).agg({
+        'Balita_Ditimbang': 'mean',
+        'Jml_Balita_Stunting': 'mean',
+        'Jml_Balita_Wasting': 'mean'
+    }).reset_index()
+    
+    scatter_avg['Pct_Balita_Stunting'] = (scatter_avg['Jml_Balita_Stunting'] / scatter_avg['Balita_Ditimbang'] * 100).round(2)
+    scatter_avg['Pct_Balita_Wasting'] = (scatter_avg['Jml_Balita_Wasting'] / scatter_avg['Balita_Ditimbang'] * 100).round(2)
     
     # Warna kontras untuk setiap kecamatan
     color_kecamatan = {
@@ -655,10 +736,10 @@ def render_distribution(df):
         'BONTANG SELATAN': '#DC2626'   # Merah
     }
     
-    fig = px.scatter(df_latest, x='Pct_Balita_Stunting', y='Pct_Balita_Wasting', size='Balita_Ditimbang',
+    fig = px.scatter(scatter_avg, x='Pct_Balita_Stunting', y='Pct_Balita_Wasting', size='Balita_Ditimbang',
                      color='Kecamatan', hover_name='Kelurahan',
                      color_discrete_map=color_kecamatan,
-                     title='📊 Korelasi Stunting vs Wasting per Kelurahan',
+                     title='📊 Korelasi Stunting vs Wasting per Kelurahan (Rata-rata Bulanan)',
                      labels={'Pct_Balita_Stunting': 'Stunting (%)', 'Pct_Balita_Wasting': 'Wasting (%)'})
     fig.add_hline(y=5, line_dash="dash", line_color="orange", opacity=0.5)
     fig.add_vline(x=14, line_dash="dash", line_color="red", opacity=0.5)
@@ -669,9 +750,9 @@ def render_distribution(df):
 # TAB PERBANDINGAN
 # ============================================================================
 def render_comparison(df):
-    """Render tab perbandingan"""
+    """Render tab perbandingan dengan RATA-RATA BULANAN"""
     
-    st.markdown('<div class="section-header">⚖️ Perbandingan Antar Wilayah</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header">⚖️ Perbandingan Antar Wilayah (Rata-rata Bulanan)</div>', unsafe_allow_html=True)
     
     # Pilihan level perbandingan
     level = st.radio(
@@ -680,43 +761,73 @@ def render_comparison(df):
         horizontal=True
     )
     
-    df_latest = get_latest_data(df)
-    
-    # Agregasi data berdasarkan level
+    # Agregasi data berdasarkan level dengan RATA-RATA BULANAN
     if level == "Kelurahan":
-        wilayah_list = sorted(df_latest['Kelurahan'].unique())
         wilayah_col = 'Kelurahan'
-        df_agg = df_latest
+        monthly = df.groupby(['Tahun', 'Bulan', 'Kelurahan']).agg({
+            'Balita_Bulan_Ini': 'sum',
+            'Balita_Ditimbang': 'sum',
+            'Jml_Balita_Stunting': 'sum',
+            'Jml_Balita_Wasting': 'sum',
+            'Jml_Balita_Overweight': 'sum',
+            'Jml_Balita_Underweight': 'sum'
+        }).reset_index()
+        df_agg = monthly.groupby('Kelurahan').agg({
+            'Balita_Bulan_Ini': 'mean',
+            'Balita_Ditimbang': 'mean',
+            'Jml_Balita_Stunting': 'mean',
+            'Jml_Balita_Wasting': 'mean',
+            'Jml_Balita_Overweight': 'mean',
+            'Jml_Balita_Underweight': 'mean'
+        }).reset_index()
+        wilayah_list = sorted(df_agg['Kelurahan'].unique())
+        
     elif level == "Kecamatan":
         wilayah_col = 'Kecamatan'
-        df_agg = df_latest.groupby('Kecamatan').agg({
+        monthly = df.groupby(['Tahun', 'Bulan', 'Kecamatan']).agg({
+            'Balita_Bulan_Ini': 'sum',
             'Balita_Ditimbang': 'sum',
             'Jml_Balita_Stunting': 'sum',
             'Jml_Balita_Wasting': 'sum',
             'Jml_Balita_Overweight': 'sum',
             'Jml_Balita_Underweight': 'sum'
         }).reset_index()
-        # Hitung persentase
-        df_agg['Pct_Balita_Stunting'] = (df_agg['Jml_Balita_Stunting'] / df_agg['Balita_Ditimbang'] * 100).round(2)
-        df_agg['Pct_Balita_Wasting'] = (df_agg['Jml_Balita_Wasting'] / df_agg['Balita_Ditimbang'] * 100).round(2)
-        df_agg['Pct_Balita_Overweight'] = (df_agg['Jml_Balita_Overweight'] / df_agg['Balita_Ditimbang'] * 100).round(2)
-        df_agg['Pct_Balita_Underweight'] = (df_agg['Jml_Balita_Underweight'] / df_agg['Balita_Ditimbang'] * 100).round(2)
+        df_agg = monthly.groupby('Kecamatan').agg({
+            'Balita_Bulan_Ini': 'mean',
+            'Balita_Ditimbang': 'mean',
+            'Jml_Balita_Stunting': 'mean',
+            'Jml_Balita_Wasting': 'mean',
+            'Jml_Balita_Overweight': 'mean',
+            'Jml_Balita_Underweight': 'mean'
+        }).reset_index()
         wilayah_list = sorted(df_agg['Kecamatan'].unique())
+        
     else:  # Puskesmas
         wilayah_col = 'Puskesmas'
-        df_agg = df_latest.groupby('Puskesmas').agg({
+        monthly = df.groupby(['Tahun', 'Bulan', 'Puskesmas']).agg({
+            'Balita_Bulan_Ini': 'sum',
             'Balita_Ditimbang': 'sum',
             'Jml_Balita_Stunting': 'sum',
             'Jml_Balita_Wasting': 'sum',
             'Jml_Balita_Overweight': 'sum',
             'Jml_Balita_Underweight': 'sum'
         }).reset_index()
-        # Hitung persentase
-        df_agg['Pct_Balita_Stunting'] = (df_agg['Jml_Balita_Stunting'] / df_agg['Balita_Ditimbang'] * 100).round(2)
-        df_agg['Pct_Balita_Wasting'] = (df_agg['Jml_Balita_Wasting'] / df_agg['Balita_Ditimbang'] * 100).round(2)
-        df_agg['Pct_Balita_Overweight'] = (df_agg['Jml_Balita_Overweight'] / df_agg['Balita_Ditimbang'] * 100).round(2)
-        df_agg['Pct_Balita_Underweight'] = (df_agg['Jml_Balita_Underweight'] / df_agg['Balita_Ditimbang'] * 100).round(2)
+        df_agg = monthly.groupby('Puskesmas').agg({
+            'Balita_Bulan_Ini': 'mean',
+            'Balita_Ditimbang': 'mean',
+            'Jml_Balita_Stunting': 'mean',
+            'Jml_Balita_Wasting': 'mean',
+            'Jml_Balita_Overweight': 'mean',
+            'Jml_Balita_Underweight': 'mean'
+        }).reset_index()
         wilayah_list = sorted(df_agg['Puskesmas'].unique())
+    
+    # Hitung persentase
+    df_agg['Pct_Balita_Stunting'] = (df_agg['Jml_Balita_Stunting'] / df_agg['Balita_Ditimbang'] * 100).round(2)
+    df_agg['Pct_Balita_Wasting'] = (df_agg['Jml_Balita_Wasting'] / df_agg['Balita_Ditimbang'] * 100).round(2)
+    df_agg['Pct_Balita_Overweight'] = (df_agg['Jml_Balita_Overweight'] / df_agg['Balita_Ditimbang'] * 100).round(2)
+    df_agg['Pct_Balita_Underweight'] = (df_agg['Jml_Balita_Underweight'] / df_agg['Balita_Ditimbang'] * 100).round(2)
+    df_agg['Pct_Cakupan_DS'] = (df_agg['Balita_Ditimbang'] / df_agg['Balita_Bulan_Ini'] * 100).round(2)
     
     col1, col2 = st.columns(2)
     
@@ -728,44 +839,48 @@ def render_comparison(df):
     data1 = df_agg[df_agg[wilayah_col] == wilayah1].iloc[0]
     data2 = df_agg[df_agg[wilayah_col] == wilayah2].iloc[0]
     
-    categories = ['Stunting', 'Wasting', 'Overweight', 'Underweight']
+    # 5 indikator untuk radar chart
+    categories = ['Stunting', 'Wasting', 'Overweight', 'Underweight', '% D/S']
     
-    # Radar chart
+    # Radar chart dengan 5 indikator
     fig = go.Figure()
     fig.add_trace(go.Scatterpolar(
-        r=[data1['Pct_Balita_Stunting'], data1['Pct_Balita_Wasting'], data1['Pct_Balita_Overweight'], data1['Pct_Balita_Underweight']],
+        r=[data1['Pct_Balita_Stunting'], data1['Pct_Balita_Wasting'], data1['Pct_Balita_Overweight'], data1['Pct_Balita_Underweight'], data1['Pct_Cakupan_DS']],
         theta=categories, fill='toself', name=wilayah1, line_color='#2563EB', fillcolor='rgba(37,99,235,0.25)'
     ))
     fig.add_trace(go.Scatterpolar(
-        r=[data2['Pct_Balita_Stunting'], data2['Pct_Balita_Wasting'], data2['Pct_Balita_Overweight'], data2['Pct_Balita_Underweight']],
+        r=[data2['Pct_Balita_Stunting'], data2['Pct_Balita_Wasting'], data2['Pct_Balita_Overweight'], data2['Pct_Balita_Underweight'], data2['Pct_Cakupan_DS']],
         theta=categories, fill='toself', name=wilayah2, line_color='#16A34A', fillcolor='rgba(22,163,74,0.25)'
     ))
-    fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 35])),
+    fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 100])),
                       title=f'📊 Perbandingan {wilayah1} vs {wilayah2}', height=450)
     st.plotly_chart(fig, use_container_width=True)
     
-    # Tabel perbandingan detail
+    # Tabel perbandingan detail dengan 5 indikator
     st.markdown(f'<div class="section-header">📋 Detail Perbandingan {level}</div>', unsafe_allow_html=True)
     
     comparison_data = {
-        'Indikator': ['Stunting', 'Wasting', 'Overweight', 'Underweight'],
+        'Indikator': ['Stunting', 'Wasting', 'Overweight', 'Underweight', '% D/S (Cakupan)'],
         wilayah1: [
             f"{data1['Pct_Balita_Stunting']:.2f}%".replace('.', ','),
             f"{data1['Pct_Balita_Wasting']:.2f}%".replace('.', ','),
             f"{data1['Pct_Balita_Overweight']:.2f}%".replace('.', ','),
-            f"{data1['Pct_Balita_Underweight']:.2f}%".replace('.', ',')
+            f"{data1['Pct_Balita_Underweight']:.2f}%".replace('.', ','),
+            f"{data1['Pct_Cakupan_DS']:.2f}%".replace('.', ',')
         ],
         wilayah2: [
             f"{data2['Pct_Balita_Stunting']:.2f}%".replace('.', ','),
             f"{data2['Pct_Balita_Wasting']:.2f}%".replace('.', ','),
             f"{data2['Pct_Balita_Overweight']:.2f}%".replace('.', ','),
-            f"{data2['Pct_Balita_Underweight']:.2f}%".replace('.', ',')
+            f"{data2['Pct_Balita_Underweight']:.2f}%".replace('.', ','),
+            f"{data2['Pct_Cakupan_DS']:.2f}%".replace('.', ',')
         ],
         'Selisih': [
             f"{(data1['Pct_Balita_Stunting'] - data2['Pct_Balita_Stunting']):+.2f}%".replace('.', ','),
             f"{(data1['Pct_Balita_Wasting'] - data2['Pct_Balita_Wasting']):+.2f}%".replace('.', ','),
             f"{(data1['Pct_Balita_Overweight'] - data2['Pct_Balita_Overweight']):+.2f}%".replace('.', ','),
-            f"{(data1['Pct_Balita_Underweight'] - data2['Pct_Balita_Underweight']):+.2f}%".replace('.', ',')
+            f"{(data1['Pct_Balita_Underweight'] - data2['Pct_Balita_Underweight']):+.2f}%".replace('.', ','),
+            f"{(data1['Pct_Cakupan_DS'] - data2['Pct_Cakupan_DS']):+.2f}%".replace('.', ',')
         ]
     }
     
