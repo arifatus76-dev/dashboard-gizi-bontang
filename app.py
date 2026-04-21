@@ -899,10 +899,10 @@ def main():
     """, unsafe_allow_html=True)
     
     try:
-        df = load_data('Database_Gizi_Clean.csv')
+        df = load_data('Clean.csv')
         df = process_data(df)
     except FileNotFoundError:
-        st.error("⚠️ File `Database_Gizi_Clean.csv` tidak ditemukan. Pastikan file ada di folder yang sama.")
+        st.error("⚠️ File `Clean.csv` tidak ditemukan. Pastikan file ada di folder yang sama.")
         st.stop()
     except Exception as e:
         st.error(f"Error: {str(e)}")
