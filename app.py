@@ -15,6 +15,52 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from datetime import datetime
+import io
+import base64
+
+# ============================================================================
+# FUNGSI DOWNLOAD TABEL
+# ============================================================================
+def create_download_buttons(df, filename_prefix, key_prefix):
+    """Membuat tombol download untuk tabel dalam format CSV, Excel, dan JSON"""
+    
+    col_csv, col_excel, col_json = st.columns(3)
+    
+    with col_csv:
+        # CSV
+        csv_data = df.to_csv(index=False, sep=';', decimal=',')
+        st.download_button(
+            label="📥 CSV",
+            data=csv_data,
+            file_name=f"{filename_prefix}.csv",
+            mime="text/csv",
+            key=f"{key_prefix}_csv"
+        )
+    
+    with col_excel:
+        # Excel
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='Data')
+        excel_data = output.getvalue()
+        st.download_button(
+            label="📥 Excel",
+            data=excel_data,
+            file_name=f"{filename_prefix}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key=f"{key_prefix}_excel"
+        )
+    
+    with col_json:
+        # JSON
+        json_data = df.to_json(orient='records', force_ascii=False, indent=2)
+        st.download_button(
+            label="📥 JSON",
+            data=json_data,
+            file_name=f"{filename_prefix}.json",
+            mime="application/json",
+            key=f"{key_prefix}_json"
+        )
 
 # ============================================================================
 # KONFIGURASI HALAMAN
@@ -545,29 +591,59 @@ def render_overview(df, year_mode):
     
     with col1:
         st.metric("👶 Balita Ditimbang", format_number(avg_ditimbang))
-        st.caption("Rata-rata per Bulan")
+        st.markdown(f'<p style="color: #2563EB; font-size: 0.85rem; margin-top: -10px;">Rata-rata per Bulan</p>', unsafe_allow_html=True)
     with col2:
         st.metric("📏 Stunting", format_pct(pct_stunting))
-        st.caption(f"{format_number(avg_stunting)} balita/bulan")
+        st.markdown(f'<p style="color: #2563EB; font-size: 0.85rem; margin-top: -10px;"><strong>{format_number(avg_stunting)}</strong> balita/bulan</p>', unsafe_allow_html=True)
     with col3:
         st.metric("⚖️ Wasting", format_pct(pct_wasting))
-        st.caption(f"{format_number(avg_wasting)} balita/bulan")
+        st.markdown(f'<p style="color: #2563EB; font-size: 0.85rem; margin-top: -10px;"><strong>{format_number(avg_wasting)}</strong> balita/bulan</p>', unsafe_allow_html=True)
     with col4:
         st.metric("📈 Overweight", format_pct(pct_overweight))
-        st.caption(f"{format_number(avg_overweight)} balita/bulan")
+        st.markdown(f'<p style="color: #2563EB; font-size: 0.85rem; margin-top: -10px;"><strong>{format_number(avg_overweight)}</strong> balita/bulan</p>', unsafe_allow_html=True)
     with col5:
         st.metric("⬇️ Underweight", format_pct(pct_underweight))
-        st.caption(f"{format_number(avg_underweight)} balita/bulan")
+        st.markdown(f'<p style="color: #2563EB; font-size: 0.85rem; margin-top: -10px;"><strong>{format_number(avg_underweight)}</strong> balita/bulan</p>', unsafe_allow_html=True)
     with col6:
         st.metric("📋 % D/S", format_pct(pct_cakupan))
-        st.caption("Cakupan Penimbangan")
+        st.markdown(f'<p style="color: #2563EB; font-size: 0.85rem; margin-top: -10px;">Cakupan Penimbangan</p>', unsafe_allow_html=True)
     
-    # Catatan Cakupan Penimbangan
+    # Catatan Rumus Perhitungan
     st.markdown(f"""
     <div style="background-color: #F0FDF4; border: 1px solid #86EFAC; border-radius: 8px; padding: 12px; margin-top: 10px; font-size: 0.85rem;">
-        <strong>📝 Catatan Cakupan Penimbangan:</strong><br>
-        Cakupan = (Balita Ditimbang / Sasaran Balita) × 100%<br>
-        Cakupan = ({format_number(avg_ditimbang)} / {format_number(avg_sasaran)}) × 100% = <strong>{format_pct(pct_cakupan)}</strong>
+        <strong>📝 Catatan Rumus Perhitungan:</strong><br><br>
+        <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+            <tr style="border-bottom: 1px solid #86EFAC;">
+                <td style="padding: 4px 8px; width: 20%;"><strong>Stunting</strong></td>
+                <td style="padding: 4px 8px;">= (Balita Stunting / Balita Ditimbang) × 100%</td>
+                <td style="padding: 4px 8px;">= ({format_number(avg_stunting)} / {format_number(avg_ditimbang)}) × 100%</td>
+                <td style="padding: 4px 8px; text-align: right;"><strong>{format_pct(pct_stunting)}</strong></td>
+            </tr>
+            <tr style="border-bottom: 1px solid #86EFAC;">
+                <td style="padding: 4px 8px;"><strong>Wasting</strong></td>
+                <td style="padding: 4px 8px;">= (Balita Wasting / Balita Ditimbang) × 100%</td>
+                <td style="padding: 4px 8px;">= ({format_number(avg_wasting)} / {format_number(avg_ditimbang)}) × 100%</td>
+                <td style="padding: 4px 8px; text-align: right;"><strong>{format_pct(pct_wasting)}</strong></td>
+            </tr>
+            <tr style="border-bottom: 1px solid #86EFAC;">
+                <td style="padding: 4px 8px;"><strong>Overweight</strong></td>
+                <td style="padding: 4px 8px;">= (Balita Overweight / Balita Ditimbang) × 100%</td>
+                <td style="padding: 4px 8px;">= ({format_number(avg_overweight)} / {format_number(avg_ditimbang)}) × 100%</td>
+                <td style="padding: 4px 8px; text-align: right;"><strong>{format_pct(pct_overweight)}</strong></td>
+            </tr>
+            <tr style="border-bottom: 1px solid #86EFAC;">
+                <td style="padding: 4px 8px;"><strong>Underweight</strong></td>
+                <td style="padding: 4px 8px;">= (Balita Underweight / Balita Ditimbang) × 100%</td>
+                <td style="padding: 4px 8px;">= ({format_number(avg_underweight)} / {format_number(avg_ditimbang)}) × 100%</td>
+                <td style="padding: 4px 8px; text-align: right;"><strong>{format_pct(pct_underweight)}</strong></td>
+            </tr>
+            <tr>
+                <td style="padding: 4px 8px;"><strong>% D/S</strong></td>
+                <td style="padding: 4px 8px;">= (Balita Ditimbang / Sasaran Balita) × 100%</td>
+                <td style="padding: 4px 8px;">= ({format_number(avg_ditimbang)} / {format_number(avg_sasaran)}) × 100%</td>
+                <td style="padding: 4px 8px; text-align: right;"><strong>{format_pct(pct_cakupan)}</strong></td>
+            </tr>
+        </table>
     </div>
     """, unsafe_allow_html=True)
     
@@ -696,7 +772,14 @@ def render_distribution(df):
                      text=f'Pct_{indicator}')
         fig.update_traces(texttemplate='%{text:.2f}%', textposition='outside')
         fig.add_vline(x=target_val, line_dash="dash", line_color="green", annotation_text=f"Target {target_val}%")
-        fig.update_layout(height=400, showlegend=False)
+        # Perbesar margin kanan dan x-axis range agar angka terlihat
+        max_val = puskesmas_avg[f'Pct_{indicator}'].max()
+        fig.update_layout(
+            height=350, 
+            showlegend=False,
+            margin=dict(l=10, r=80, t=40, b=40),
+            xaxis=dict(range=[0, max_val * 1.3])
+        )
         st.plotly_chart(fig, use_container_width=True)
     
     with col2:
@@ -707,8 +790,50 @@ def render_distribution(df):
             fig = px.treemap(treemap_data, path=['Kecamatan', 'Kelurahan'], values=f'Jml_Balita_{indicator}',
                            color=f'Pct_Balita_{indicator}', color_continuous_scale=['#16A34A', '#F59E0B', '#DC2626'],
                            range_color=color_range, title=f'🗺️ Distribusi {indicator} per Kelurahan')
-            fig.update_layout(height=400)
+            fig.update_layout(height=350, margin=dict(l=10, r=10, t=40, b=10))
             st.plotly_chart(fig, use_container_width=True)
+    
+    # Tabel Data per Puskesmas dan Kelurahan
+    st.markdown(f'<div class="section-header">📋 Tabel Data {indicator}</div>', unsafe_allow_html=True)
+    
+    # Fungsi format angka Indonesia
+    def format_id(num):
+        """Format angka dengan 2 desimal, koma sebagai desimal, titik sebagai ribuan"""
+        return f"{num:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    
+    def format_id_int(num):
+        """Format angka bulat dengan titik sebagai ribuan"""
+        return f"{int(round(num)):,}".replace(",", ".")
+    
+    col_tbl1, col_tbl2 = st.columns(2)
+    
+    with col_tbl1:
+        st.markdown(f"**Data per Puskesmas**")
+        # Siapkan tabel puskesmas
+        tbl_puskesmas = puskesmas_avg[['Puskesmas', 'Balita_Ditimbang', f'Jml_Balita_{indicator}', f'Pct_{indicator}']].copy()
+        tbl_puskesmas = tbl_puskesmas.sort_values(f'Pct_{indicator}', ascending=False)
+        # Format angka
+        tbl_puskesmas['Balita_Ditimbang'] = tbl_puskesmas['Balita_Ditimbang'].apply(format_id_int)
+        tbl_puskesmas[f'Jml_Balita_{indicator}'] = tbl_puskesmas[f'Jml_Balita_{indicator}'].apply(format_id_int)
+        tbl_puskesmas[f'Pct_{indicator}'] = tbl_puskesmas[f'Pct_{indicator}'].apply(format_id)
+        tbl_puskesmas.columns = ['Puskesmas', 'Balita Ditimbang', f'Jml {indicator}', 'Prevalensi (%)']
+        st.dataframe(tbl_puskesmas, use_container_width=True, hide_index=True)
+        # Tombol download
+        create_download_buttons(tbl_puskesmas, f"data_{indicator.lower()}_puskesmas", f"puskesmas_{indicator.lower()}")
+    
+    with col_tbl2:
+        st.markdown(f"**Data per Kelurahan**")
+        # Siapkan tabel kelurahan
+        tbl_kelurahan = kelurahan_avg[['Kelurahan', 'Balita_Ditimbang', f'Jml_Balita_{indicator}', f'Pct_Balita_{indicator}']].copy()
+        tbl_kelurahan = tbl_kelurahan.sort_values(f'Pct_Balita_{indicator}', ascending=False)
+        # Format angka
+        tbl_kelurahan['Balita_Ditimbang'] = tbl_kelurahan['Balita_Ditimbang'].apply(format_id_int)
+        tbl_kelurahan[f'Jml_Balita_{indicator}'] = tbl_kelurahan[f'Jml_Balita_{indicator}'].apply(format_id_int)
+        tbl_kelurahan[f'Pct_Balita_{indicator}'] = tbl_kelurahan[f'Pct_Balita_{indicator}'].apply(format_id)
+        tbl_kelurahan.columns = ['Kelurahan', 'Balita Ditimbang', f'Jml {indicator}', 'Prevalensi (%)']
+        st.dataframe(tbl_kelurahan, use_container_width=True, hide_index=True)
+        # Tombol download
+        create_download_buttons(tbl_kelurahan, f"data_{indicator.lower()}_kelurahan", f"kelurahan_{indicator.lower()}")
     
     # Scatter plot dengan rata-rata bulanan
     st.markdown('<div class="section-header">🔍 Analisis Korelasi</div>', unsafe_allow_html=True)
@@ -886,6 +1011,9 @@ def render_comparison(df):
     
     df_comparison = pd.DataFrame(comparison_data)
     st.dataframe(df_comparison, use_container_width=True, hide_index=True)
+    
+    # Tombol download untuk tabel perbandingan
+    create_download_buttons(df_comparison, f"perbandingan_{wilayah1}_vs_{wilayah2}", f"comparison_{level}")
 
 # ============================================================================
 # MAIN APP
@@ -899,10 +1027,10 @@ def main():
     """, unsafe_allow_html=True)
     
     try:
-        df = load_data('Clean.csv')
+        df = load_data('Database_Gizi_Clean.csv')
         df = process_data(df)
     except FileNotFoundError:
-        st.error("⚠️ File `Clean.csv` tidak ditemukan. Pastikan file ada di folder yang sama.")
+        st.error("⚠️ File `Database_Gizi_Clean.csv` tidak ditemukan. Pastikan file ada di folder yang sama.")
         st.stop()
     except Exception as e:
         st.error(f"Error: {str(e)}")
