@@ -707,6 +707,43 @@ def render_trend(df):
     
     fig.update_layout(height=350, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
     st.plotly_chart(fig, use_container_width=True)
+    
+    # Tabel Data Bulanan
+    st.markdown(f'<div class="section-header">📋 Tabel Data {indicator} Bulanan</div>', unsafe_allow_html=True)
+    
+    # Fungsi format angka Indonesia (lokal)
+    def format_id_local(num):
+        return f"{num:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    
+    def format_id_int_local(num):
+        return f"{int(round(num)):,}".replace(",", ".")
+    
+    # Siapkan data tabel bulanan
+    tbl_trend = df.groupby(['Tahun', 'Bulan', 'Bulan_Num']).agg({
+        'Balita_Bulan_Ini': 'sum',
+        'Balita_Ditimbang': 'sum',
+        f'Jml_Balita_{indicator}': 'sum'
+    }).reset_index().sort_values(['Tahun', 'Bulan_Num'])
+    
+    # Hitung prevalensi
+    tbl_trend[f'Pct_{indicator}'] = (tbl_trend[f'Jml_Balita_{indicator}'] / tbl_trend['Balita_Ditimbang'] * 100).round(2)
+    
+    # Siapkan tabel untuk ditampilkan
+    tbl_display = tbl_trend[['Tahun', 'Bulan', 'Balita_Bulan_Ini', 'Balita_Ditimbang', f'Jml_Balita_{indicator}', f'Pct_{indicator}']].copy()
+    
+    # Format angka
+    tbl_display['Balita_Bulan_Ini'] = tbl_display['Balita_Bulan_Ini'].apply(format_id_int_local)
+    tbl_display['Balita_Ditimbang'] = tbl_display['Balita_Ditimbang'].apply(format_id_int_local)
+    tbl_display[f'Jml_Balita_{indicator}'] = tbl_display[f'Jml_Balita_{indicator}'].apply(format_id_int_local)
+    tbl_display[f'Pct_{indicator}'] = tbl_display[f'Pct_{indicator}'].apply(format_id_local)
+    
+    # Rename kolom
+    tbl_display.columns = ['Tahun', 'Bulan', 'Sasaran Balita', 'Balita Ditimbang', f'Jml {indicator}', 'Prevalensi (%)']
+    
+    st.dataframe(tbl_display, use_container_width=True, hide_index=True)
+    
+    # Tombol download
+    create_download_buttons(tbl_display, f"data_trend_{indicator.lower()}_bulanan", f"trend_{indicator.lower()}")
 
 # ============================================================================
 # TAB DISTRIBUSI
