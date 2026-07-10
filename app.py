@@ -820,15 +820,24 @@ def render_distribution(df):
         st.plotly_chart(fig, use_container_width=True)
     
     with col2:
-        treemap_data = kelurahan_avg[['Kecamatan', 'Kelurahan', f'Jml_Balita_{indicator}', f'Pct_Balita_{indicator}']].copy()
-        treemap_data = treemap_data[treemap_data[f'Jml_Balita_{indicator}'] > 0]
+        # Bar chart horizontal untuk kelurahan (sama seperti puskesmas)
+        kelurahan_sorted = kelurahan_avg.sort_values(f'Pct_Balita_{indicator}', ascending=True)
         
-        if not treemap_data.empty:
-            fig = px.treemap(treemap_data, path=['Kecamatan', 'Kelurahan'], values=f'Jml_Balita_{indicator}',
-                           color=f'Pct_Balita_{indicator}', color_continuous_scale=['#16A34A', '#F59E0B', '#DC2626'],
-                           range_color=color_range, title=f'🗺️ Distribusi {indicator} per Kelurahan')
-            fig.update_layout(height=350, margin=dict(l=10, r=10, t=40, b=10))
-            st.plotly_chart(fig, use_container_width=True)
+        fig = px.bar(kelurahan_sorted, x=f'Pct_Balita_{indicator}', y='Kelurahan', orientation='h',
+                     title=f'📊 Prevalensi {indicator} per Kelurahan',
+                     color=f'Pct_Balita_{indicator}', color_continuous_scale=['#16A34A', '#F59E0B', '#DC2626'],
+                     text=f'Pct_Balita_{indicator}')
+        fig.update_traces(texttemplate='%{text:.2f}%', textposition='outside')
+        fig.add_vline(x=target_val, line_dash="dash", line_color="green", annotation_text=f"Target {target_val}%")
+        # Perbesar margin kanan dan x-axis range agar angka terlihat
+        max_val_kel = kelurahan_sorted[f'Pct_Balita_{indicator}'].max()
+        fig.update_layout(
+            height=450,  # Lebih tinggi karena lebih banyak kelurahan
+            showlegend=False,
+            margin=dict(l=10, r=80, t=40, b=40),
+            xaxis=dict(range=[0, max_val_kel * 1.3])
+        )
+        st.plotly_chart(fig, use_container_width=True)
     
     # Tabel Data per Puskesmas dan Kelurahan
     st.markdown(f'<div class="section-header">📋 Tabel Data {indicator}</div>', unsafe_allow_html=True)
