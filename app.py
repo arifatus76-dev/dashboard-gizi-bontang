@@ -381,7 +381,7 @@ def render_trend(df):
     
     # Aggregasi trend
     trend_data = df.groupby(['Tahun', 'Bulan', 'Bulan_Num']).agg({
-        'Balita_Ditimbang': 'sum', 'Jml_Balita_Stunting': 'sum',
+        'Balita_Bulan_Ini': 'sum', 'Balita_Ditimbang': 'sum', 'Jml_Balita_Stunting': 'sum',
         'Jml_Balita_Wasting': 'sum', 'Jml_Balita_Overweight': 'sum', 'Jml_Balita_Underweight': 'sum'
     }).reset_index().sort_values(['Tahun', 'Bulan_Num'])
     
@@ -417,13 +417,13 @@ def render_trend(df):
     
     # Tabel
     st.markdown(f'<div class="section-header">📋 Tabel Data {indicator} Bulanan</div>', unsafe_allow_html=True)
-    trend_data['Balita_Bulan_Ini_sum'] = df.groupby(['Tahun', 'Bulan', 'Bulan_Num'])['Balita_Bulan_Ini'].sum().values if len(trend_data) == len(df.groupby(['Tahun', 'Bulan', 'Bulan_Num']).ngroups) else 0
     
-    tbl = trend_data[['Tahun', 'Bulan', 'Balita_Ditimbang', f'Jml_Balita_{indicator}', indicator_col]].copy()
+    tbl = trend_data[['Tahun', 'Bulan', 'Balita_Bulan_Ini', 'Balita_Ditimbang', f'Jml_Balita_{indicator}', indicator_col]].copy()
+    tbl['Balita_Bulan_Ini'] = tbl['Balita_Bulan_Ini'].apply(fmt_id_int)
     tbl['Balita_Ditimbang'] = tbl['Balita_Ditimbang'].apply(fmt_id_int)
     tbl[f'Jml_Balita_{indicator}'] = tbl[f'Jml_Balita_{indicator}'].apply(fmt_id_int)
     tbl[indicator_col] = tbl[indicator_col].apply(fmt_id)
-    tbl.columns = ['Tahun', 'Bulan', 'Balita Ditimbang', f'Jml {indicator}', 'Prevalensi (%)']
+    tbl.columns = ['Tahun', 'Bulan', 'Sasaran Balita', 'Balita Ditimbang', f'Jml {indicator}', 'Prevalensi (%)']
     st.dataframe(tbl, use_container_width=True, hide_index=True)
     create_download_button(tbl, f"data_trend_{indicator.lower()}", f"trend_{indicator.lower()}")
     
