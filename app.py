@@ -17,50 +17,21 @@ from plotly.subplots import make_subplots
 from datetime import datetime
 import io
 import base64
+import gc
 
 # ============================================================================
 # FUNGSI DOWNLOAD TABEL
 # ============================================================================
 def create_download_buttons(df, filename_prefix, key_prefix):
-    """Membuat tombol download untuk tabel dalam format CSV, Excel, dan JSON"""
-    
-    col_csv, col_excel, col_json = st.columns(3)
-    
-    with col_csv:
-        # CSV
-        csv_data = df.to_csv(index=False, sep=';', decimal=',')
-        st.download_button(
-            label="📥 CSV",
-            data=csv_data,
-            file_name=f"{filename_prefix}.csv",
-            mime="text/csv",
-            key=f"{key_prefix}_csv"
-        )
-    
-    with col_excel:
-        # Excel
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df.to_excel(writer, index=False, sheet_name='Data')
-        excel_data = output.getvalue()
-        st.download_button(
-            label="📥 Excel",
-            data=excel_data,
-            file_name=f"{filename_prefix}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            key=f"{key_prefix}_excel"
-        )
-    
-    with col_json:
-        # JSON
-        json_data = df.to_json(orient='records', force_ascii=False, indent=2)
-        st.download_button(
-            label="📥 JSON",
-            data=json_data,
-            file_name=f"{filename_prefix}.json",
-            mime="application/json",
-            key=f"{key_prefix}_json"
-        )
+    """Membuat tombol download CSV saja (hemat memori, tanpa generate Excel/JSON di setiap render)"""
+    csv_data = df.to_csv(index=False, sep=';', decimal=',')
+    st.download_button(
+        label="📥 Download CSV",
+        data=csv_data,
+        file_name=f"{filename_prefix}.csv",
+        mime="text/csv",
+        key=f"{key_prefix}_csv"
+    )
 
 # ============================================================================
 # KONFIGURASI HALAMAN
@@ -174,7 +145,7 @@ st.markdown("""
 # ============================================================================
 # FUNGSI LOAD DATA
 # ============================================================================
-@st.cache_data
+@st.cache_data(ttl=3600, max_entries=1)
 def load_data(file_path):
     """Load data dari file CSV dengan berbagai encoding"""
     encodings = ['utf-8', 'cp1252', 'latin1', 'iso-8859-1']
@@ -189,6 +160,7 @@ def load_data(file_path):
     df = pd.read_csv(file_path, encoding='utf-8', errors='replace')
     return df
 
+@st.cache_data(ttl=3600, max_entries=1)
 def process_data(df):
     """Proses dan bersihkan data"""
     # Bersihkan data dari baris yang tidak valid
@@ -506,19 +478,19 @@ def create_sidebar(df):
     return selected_tahun, selected_bulan, selected_kecamatan, selected_puskesmas, year_mode
 
 def filter_data(df, tahun, bulan, kecamatan, puskesmas):
-    """Filter dataframe berdasarkan pilihan"""
-    filtered = df.copy()
+    """Filter dataframe berdasarkan pilihan (tanpa copy untuk hemat memori)"""
+    mask = pd.Series(True, index=df.index)
     
     if tahun:
-        filtered = filtered[filtered['Tahun'].isin(tahun)]
+        mask &= df['Tahun'].isin(tahun)
     if bulan:
-        filtered = filtered[filtered['Bulan'].isin(bulan)]
+        mask &= df['Bulan'].isin(bulan)
     if kecamatan:
-        filtered = filtered[filtered['Kecamatan'].isin(kecamatan)]
+        mask &= df['Kecamatan'].isin(kecamatan)
     if puskesmas:
-        filtered = filtered[filtered['Puskesmas'].isin(puskesmas)]
+        mask &= df['Puskesmas'].isin(puskesmas)
     
-    return filtered
+    return df[mask]
 
 # ============================================================================
 # TAB OVERVIEW
@@ -526,12 +498,10 @@ def filter_data(df, tahun, bulan, kecamatan, puskesmas):
 def render_overview(df, year_mode):
     """Render tab overview"""
     
-    df_all = df.copy()
-    
     # Hitung RATA-RATA BULANAN (bukan total kumulatif)
     # Agregasi per bulan dulu, lalu ambil rata-ratanya
-    if 'Bulan' in df_all.columns:
-        monthly_agg = df_all.groupby(['Tahun', 'Bulan']).agg({
+    if 'Bulan' in df.columns:
+        monthly_agg = df.groupby(['Tahun', 'Bulan']).agg({
             'Balita_Bulan_Ini': 'sum',
             'Balita_Ditimbang': 'sum',
             'Jml_Balita_Stunting': 'sum',
@@ -551,12 +521,12 @@ def render_overview(df, year_mode):
         jumlah_bulan = len(monthly_agg)
     else:
         # Fallback jika tidak ada kolom Bulan
-        avg_sasaran = int(df_all['Balita_Bulan_Ini'].sum())
-        avg_ditimbang = int(df_all['Balita_Ditimbang'].sum())
-        avg_stunting = int(df_all['Jml_Balita_Stunting'].sum())
-        avg_wasting = int(df_all['Jml_Balita_Wasting'].sum())
-        avg_overweight = int(df_all['Jml_Balita_Overweight'].sum())
-        avg_underweight = int(df_all['Jml_Balita_Underweight'].sum())
+        avg_sasaran = int(df['Balita_Bulan_Ini'].sum())
+        avg_ditimbang = int(df['Balita_Ditimbang'].sum())
+        avg_stunting = int(df['Jml_Balita_Stunting'].sum())
+        avg_wasting = int(df['Jml_Balita_Wasting'].sum())
+        avg_overweight = int(df['Jml_Balita_Overweight'].sum())
+        avg_underweight = int(df['Jml_Balita_Underweight'].sum())
         jumlah_bulan = 1
     
     # Hitung persentase dari rata-rata
@@ -664,8 +634,9 @@ def render_overview(df, year_mode):
     # Perbandingan Tahun
     if len(df['Tahun'].unique()) > 1:
         st.markdown('<div class="section-header">📈 Perbandingan Antar Tahun</div>', unsafe_allow_html=True)
-        fig, yearly_data = create_year_comparison_chart(df)
+        fig, _ = create_year_comparison_chart(df)
         st.plotly_chart(fig, use_container_width=True)
+        del fig
 
 # ============================================================================
 # TAB TREND
@@ -1093,12 +1064,16 @@ def main():
     
     with tab1:
         render_overview(df_filtered, year_mode)
+        gc.collect()
     with tab2:
         render_trend(df_filtered)
+        gc.collect()
     with tab3:
         render_distribution(df_filtered)
+        gc.collect()
     with tab4:
         render_comparison(df_filtered)
+        gc.collect()
     
     st.markdown("---")
     st.markdown('<div style="text-align:center;color:#64748B;font-size:1rem;">📊 Dashboard Status Gizi Balita - Dinas Kesehatan Kota Bontang | © 2025</div>', unsafe_allow_html=True)
