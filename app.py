@@ -17,6 +17,14 @@ from plotly.subplots import make_subplots
 from datetime import datetime
 import io
 import base64
+import math
+
+# ============================================================================
+# FUNGSI PEMBULATAN (seperti Excel)
+# ============================================================================
+def round_half_up(x):
+    """Pembulatan ke bilangan bulat terdekat (0.5 ke atas, seperti Excel)"""
+    return int(math.floor(x + 0.5))
 
 # ============================================================================
 # FUNGSI DOWNLOAD TABEL
@@ -540,13 +548,13 @@ def render_overview(df, year_mode):
             'Jml_Balita_Underweight': 'sum'
         }).reset_index()
         
-        # Rata-rata bulanan (dibulatkan ke angka bulat)
-        avg_sasaran = int(round(monthly_agg['Balita_Bulan_Ini'].mean()))
-        avg_ditimbang = int(round(monthly_agg['Balita_Ditimbang'].mean()))
-        avg_stunting = int(round(monthly_agg['Jml_Balita_Stunting'].mean()))
-        avg_wasting = int(round(monthly_agg['Jml_Balita_Wasting'].mean()))
-        avg_overweight = int(round(monthly_agg['Jml_Balita_Overweight'].mean()))
-        avg_underweight = int(round(monthly_agg['Jml_Balita_Underweight'].mean()))
+        # Rata-rata bulanan (dibulatkan ke angka bulat dengan round half-up seperti Excel)
+        avg_sasaran = round_half_up(monthly_agg['Balita_Bulan_Ini'].mean())
+        avg_ditimbang = round_half_up(monthly_agg['Balita_Ditimbang'].mean())
+        avg_stunting = round_half_up(monthly_agg['Jml_Balita_Stunting'].mean())
+        avg_wasting = round_half_up(monthly_agg['Jml_Balita_Wasting'].mean())
+        avg_overweight = round_half_up(monthly_agg['Jml_Balita_Overweight'].mean())
+        avg_underweight = round_half_up(monthly_agg['Jml_Balita_Underweight'].mean())
         
         jumlah_bulan = len(monthly_agg)
     else:
@@ -716,7 +724,7 @@ def render_trend(df):
         return f"{num:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     
     def format_id_int_local(num):
-        return f"{int(round(num)):,}".replace(",", ".")
+        return f"{round_half_up(num):,}".replace(",", ".")
     
     # Siapkan data tabel bulanan
     tbl_trend = df.groupby(['Tahun', 'Bulan', 'Bulan_Num']).agg({
@@ -848,8 +856,8 @@ def render_distribution(df):
         return f"{num:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     
     def format_id_int(num):
-        """Format angka bulat dengan titik sebagai ribuan"""
-        return f"{int(round(num)):,}".replace(",", ".")
+        """Format angka bulat dengan titik sebagai ribuan (round half-up seperti Excel)"""
+        return f"{round_half_up(num):,}".replace(",", ".")
     
     col_tbl1, col_tbl2 = st.columns(2)
     
