@@ -548,7 +548,7 @@ def render_overview(df, year_mode):
             'Jml_Balita_Underweight': 'sum'
         }).reset_index()
         
-        # Rata-rata bulanan (dibulatkan ke angka bulat dengan round half-up seperti Excel)
+        # Rata-rata bulanan (dibulatkan untuk TAMPILAN jumlah balita)
         avg_sasaran = round_half_up(monthly_agg['Balita_Bulan_Ini'].mean())
         avg_ditimbang = round_half_up(monthly_agg['Balita_Ditimbang'].mean())
         avg_stunting = round_half_up(monthly_agg['Jml_Balita_Stunting'].mean())
@@ -557,6 +557,14 @@ def render_overview(df, year_mode):
         avg_underweight = round_half_up(monthly_agg['Jml_Balita_Underweight'].mean())
         
         jumlah_bulan = len(monthly_agg)
+        
+        # Total kumulatif (untuk PERHITUNGAN prevalensi - tanpa pembulatan di tengah)
+        total_sasaran = df_all['Balita_Bulan_Ini'].sum()
+        total_ditimbang = df_all['Balita_Ditimbang'].sum()
+        total_stunting = df_all['Jml_Balita_Stunting'].sum()
+        total_wasting = df_all['Jml_Balita_Wasting'].sum()
+        total_overweight = df_all['Jml_Balita_Overweight'].sum()
+        total_underweight = df_all['Jml_Balita_Underweight'].sum()
     else:
         # Fallback jika tidak ada kolom Bulan
         avg_sasaran = int(df_all['Balita_Bulan_Ini'].sum())
@@ -566,15 +574,23 @@ def render_overview(df, year_mode):
         avg_overweight = int(df_all['Jml_Balita_Overweight'].sum())
         avg_underweight = int(df_all['Jml_Balita_Underweight'].sum())
         jumlah_bulan = 1
+        
+        # Total = avg untuk fallback
+        total_sasaran = avg_sasaran
+        total_ditimbang = avg_ditimbang
+        total_stunting = avg_stunting
+        total_wasting = avg_wasting
+        total_overweight = avg_overweight
+        total_underweight = avg_underweight
     
-    # Hitung persentase dari rata-rata
-    pct_stunting = round((avg_stunting / avg_ditimbang) * 100, 2) if avg_ditimbang > 0 else 0
-    pct_wasting = round((avg_wasting / avg_ditimbang) * 100, 2) if avg_ditimbang > 0 else 0
-    pct_overweight = round((avg_overweight / avg_ditimbang) * 100, 2) if avg_ditimbang > 0 else 0
-    pct_underweight = round((avg_underweight / avg_ditimbang) * 100, 2) if avg_ditimbang > 0 else 0
+    # Hitung persentase dari TOTAL KUMULATIF (seperti Excel, tanpa pembulatan di tengah)
+    pct_stunting = round((total_stunting / total_ditimbang) * 100, 2) if total_ditimbang > 0 else 0
+    pct_wasting = round((total_wasting / total_ditimbang) * 100, 2) if total_ditimbang > 0 else 0
+    pct_overweight = round((total_overweight / total_ditimbang) * 100, 2) if total_ditimbang > 0 else 0
+    pct_underweight = round((total_underweight / total_ditimbang) * 100, 2) if total_ditimbang > 0 else 0
     
-    # Hitung Cakupan Penimbangan
-    pct_cakupan = round((avg_ditimbang / avg_sasaran) * 100, 2) if avg_sasaran > 0 else 0
+    # Hitung Cakupan Penimbangan dari TOTAL KUMULATIF
+    pct_cakupan = round((total_ditimbang / total_sasaran) * 100, 2) if total_sasaran > 0 else 0
     
     # Info periode
     tahun_list = sorted(df['Tahun'].unique())
